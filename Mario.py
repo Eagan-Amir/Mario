@@ -41,7 +41,7 @@ def load_coin_frames(sheet_path, frame_width=11, frame_height=16, scale_to=TILE_
         scaled = pygame.transform.scale(frame, (scale_to, scale_to))
         frames.append(scaled)
 
-        return frames
+    return frames
 
 def load_frames(sheet_path, frame_count):
     sheet = pygame.image.load(sheet_path).convert_alpha()
@@ -222,6 +222,9 @@ class Game:
         self.score = 0
         self.font = pygame.font.SysFont("Arial", 25)
 
+        self.enemies = pygame.sprite.Group()
+        self.load_enemies()
+
     def load_collision_objects(self):
         print("[bup]")
         self.collision_objects = []
@@ -316,6 +319,18 @@ class Game:
                     # Apply offset directly to rect.y here
                     tile["rect"].y = tile["start_y"] + tile["offset_y"]
 
+    def load_enemies(self):
+        if "enemies" in self.tmxdata.layernames:
+            enemy_layer = self.tmxdata.get_layer_by_name("enemies")
+
+            for obj in enemy_layer:
+                x, y = obj.x, obj.y
+
+                left = x - 300
+                right = x + 10
+
+                self.enemies.add(Enemy(x,y, left, right))
+
     def load_reward_object(self):
         reward_layer = self.tmxdata.get_layer_by_name("Rewards")
 
@@ -400,6 +415,47 @@ class RewardSprite(pygame.sprite.Sprite):
             if self.timer >= self.pause_duration:
                 self.kill()
 
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, x, y, left_bound, right_bound):
+        super().__init__()
+
+        self.image_alive = pygame.image.load("goomba.png").convert_alpha
+        self.image_dead = pygame.image.load("squashedgoomba.png").convert_alpha
+
+        self.image = self.image_alive
+        self.rect = self.image.get_rect(topleft=(x, y))
+
+        self.pos = pygame.Vector2(x,y)
+        self.velocity = pygame.Vector2(1, 0)
+
+        self.left_bound = left_bound
+        self.right_bound = right_bound
+
+        self.alive = True
+        self.dead_timer = 0
+
+    def update(self, collision_objects):
+        self.pos.x += self.velocity.x
+        self.rect.x = int(self.pos.x)
+
+        if self.rect.left <= self.left_bound:
+            self.velocity.x = 1
+        elif self.rect.right >= self.right_bound:
+            self.velocity.x = -1
+
+        if not self.alive:
+            if pygame.time.get_ticks() - self.dead_timer > 1000:
+                self.kill()
+        
+    def die(self):
+        if self.alive:
+            print("enup")
+            self.alive = False
+            self.dead_timer = pygame.time.get_ticks()
+            self.image = self.image_dead
+            old_bottom = self.rect.bottom
+            self.rect = self.image.get_rect(midbottom=(self.rect.centerx, old_bottom))
+
 def main():
     game = Game("TOC2.tmx")
     spawn_x, spawn_y = game.get_spawn_point()
@@ -417,12 +473,38 @@ def main():
         player.trybreakblocks(game)
         camera.update(player)
         game.update_breakable_tile_animations()
+        game.enemies.update(game.collision_objects)
 
         game_surface.fill((50, 50, 50))
         game.render(game_surface, camera.camera)
 
         score_text = game.font.render(f"score: {game.score}", True, (255, 255, 255))
         game_surface.blit(score_text, (4, 4))
+
+        for enemy in game.enemies:
+            game_surface.blit(enemy.image, camera.apply(enemy.rect))
+        
+        def show_game_over():
+            text = game.font.render("GAME OVER", False, (255, 255, 255), (0, 0, 0))
+            rect = text.get_rect(center=(BASE_WIDTH // 2, BASE_HEIGHT // 2))
+            game_surface.blit(text, rect)
+            scaled_surface = pygame.transform.scale(game_surface, screen.get_size())
+            screen.blit(scaled_surface, (0, 0))
+            pygame.display.flip()
+            pygame.time.delay(5000)
+
+        for enemy in game.enemies:
+            if player.rect.colliderect(enemy.rect):
+                if player.velocity.y> 0 and player.rect.bottom - enemy.rect.top < 10:
+                    print("STUP")
+                    enemy.die()
+                    player.velocity.y = -5
+                    game.score += 20
+                else:
+                    print("HIUP")
+                    show_game_over()
+                    running = False
+                break
 
         game_surface.blit(player.image, camera.apply(player.rect))
         game.spawned_rewards.update()
