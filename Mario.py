@@ -419,8 +419,8 @@ class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, left_bound, right_bound):
         super().__init__()
 
-        self.image_alive = pygame.image.load("goomba.png").convert_alpha
-        self.image_dead = pygame.image.load("squashedgoomba.png").convert_alpha
+        self.image_alive = pygame.image.load("goomba.png").convert_alpha()
+        self.image_dead = pygame.image.load("squashedgoomba.png").convert_alpha()
 
         self.image = self.image_alive
         self.rect = self.image.get_rect(topleft=(x, y))
